@@ -2,7 +2,6 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include "global.cpp"
 #include <QMainWindow>
 #include <string>
 #include <vector>

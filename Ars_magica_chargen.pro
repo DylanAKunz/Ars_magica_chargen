@@ -24,8 +24,7 @@ CONFIG += release
 
 SOURCES += \
         main.cpp \
-        mainwindow.cpp \
-    global.cpp
+        mainwindow.cpp
 
 HEADERS += \
         mainwindow.h

@@ -1,0 +1,188 @@
+#include "mainwindow.h"
+
+using namespace std;
+
+learnedSkills grog;
+
+int randNum(int min, int max)  //Generate a random number.
+{
+    unsigned int N = (max - min <= RAND_MAX)
+        ? (max - min + 1U)
+        : (RAND_MAX + 1U);
+    unsigned int x = (RAND_MAX + 1U) / N;
+    unsigned int y = x * N;
+    unsigned int r;
+    do {
+        r = rand();
+    } while (r >= y);
+    return r / x + min;
+}
+
+//Generate a array of six elements, and then even it out to have a total converted value of seven.
+void genAttributes() {
+    int attributePoints = 7; //Desired value.
+    int attributeTotal = 0;
+    map<int, int> attributeCost = { { -3, -6 }, { -2, -3 }, { -1, -1 }, { 0, 0 }, { 1, 1 }, {2, 3}, {3, 6} };	//Map of equivelant values.
+    int attributes[8] = { randNum(-3, 3), randNum(-3, 3), randNum(-3, 3), randNum(-3, 3), randNum(-3, 3), randNum(-3, 3), randNum(-3, 3), randNum(-3, 3) };	//Generates a random number between -3 and 3 for the six values in the array.
+    int length = _countof(attributes);
+    while(attributeTotal != attributePoints)	//Checks if the total relative value of the array is seven, if it's greater, reduces a random number, if less than, increases a random number.
+    {
+        attributeTotal = 0;  //Resets attribute Total.
+        for (int i = length-1; i >= 0; i--) //Calculates the total relative value of the attributes.
+        {
+            attributeTotal = attributeTotal + attributeCost[attributes[i]];
+        }
+        int randElement = randNum(0, length - 1);
+        if (attributeTotal > attributePoints && attributes[randElement] > -3) {		//Checks if attributes is greater, reduces.
+            attributes[randElement]--;
+        }
+        else if (attributeTotal < attributePoints && attributes[randElement] < 3)	//Checks if attributes is less than, Increases.
+        {
+            attributes[randElement]++;
+        }
+    }
+    length = sizeof(attributes) / sizeof(int);
+    string attributeName[8] = {"Intelligence", "Perception", "Strength", "Stamina", "Presence", "Communication", "Dexterity", "Quickness"};//Attribute names.
+    for (int i = 0; i < length; i++) {//Iterates throught the attributes, adding them to grog.
+        grog.attributeValue.push_back(attributes[i]);
+        grog.attributeName.push_back(attributeName[i]);
+    }
+}
+
+vector<string> retrieveSkills(string characterType) { //Determine wether retrieving a list of skills for a characters career or their youth, then retrieve the relevant list.
+    string commonName;//Variable for holding the value for the common category.
+    vector<string> skillPossible;//Array of possible strings.
+    string line;
+    QString file = QCoreApplication::applicationDirPath() + "/skills.txt";//Opens the file skills.txt in the same directory as the exe.
+    if (characterType != "YOUTH") {
+        commonName = "COMMON";
+    }
+    else {
+        commonName = "UNAVAIL";
+    }
+    QFile skillsFile(file);	//open the file containing the total list of skills.
+    if (skillsFile.open(QFile::ReadOnly)) {		//Check wether the file is open, search it from the relevant skills, then add them to the vector "skillRaw".
+        QTextStream in(&skillsFile);
+        while (!in.atEnd()) {//Reads through every line in skills.txt and checks if they are valid for the career, if so adds it to the vector<string> 'skillsPossible'.
+            line = in.readLine().toUtf8().constData();
+            bool skillFound = line.string::find(characterType) != std::string::npos;//Checks if it fits the career.
+            bool common = line.string::find(commonName) != std::string::npos;//Checks if it has the common type.
+            if (skillFound == true || common == true) {	//Check if a skill is common or matches the category, then add it if it is.
+                skillPossible.push_back(line);
+            }
+        }
+        skillsFile.close();	//Close the file.
+    }
+    return skillPossible;
+}
+
+//Assigns skills from availSkills to a character based on the xp they have
+void assignSkills(vector<string> availableSkills, int years, bool bonus = false) {
+    //Initializes the ints availLength(The length of availSkills), known length(the amount of known skills), expPerYear(The amount of exp gained per year), newSkillChance(Chance for a new skill, in percentages) skillPosition(Keeps track of the position the skill is taken from), and experience(the experience total).
+    int availLength = availableSkills.size(), knownLength, expPerYear = 15, newSkillChance = 100, skillPosition, experience = years * expPerYear;
+    if(bonus == true){//If the character has the trait educated or warrior, awards 50 bonus exp.
+        experience += 50;
+    }
+    while (!experience <= 0) {//If it still has xp remaining, iterate through the loop.  The loop either assigns a new skill to the array and spends the xp, or upgrades an existing one spending xp to do so.
+        if (randNum(1, 100) <= newSkillChance && availLength != 0 || (experience == 5 || experience == 10)) {//Checks against the chance for a new skill, or if there is only 10 or 5 xp remaining.
+            skillPosition = randNum(0, availLength - 1);//assign a random value equal to a position in the vector availLength.
+            if(find(grog.knownSkills.begin(), grog.knownSkills.end(), availableSkills[skillPosition]) == grog.knownSkills.end()){//Checks if a skills is already known from another iteration of the function or other methods.
+                grog.knownSkills.push_back(availableSkills[skillPosition]);//Add the skill to known skills.
+                availableSkills.erase(availableSkills.begin() + skillPosition);//Erase the skill from avilableSkills.
+                availLength = availableSkills.size();
+                newSkillChance = 100 - (10 * (1 + grog.knownSkills.size() / (1 + 0.05 * grog.knownSkills.size())));//Calculates the chance for adding a new skill.
+                grog.skillExperience.push_back(1);
+                experience -= 5;//Deducts XP
+            }
+        }
+        else {
+            knownLength = grog.knownSkills.size();
+            skillPosition = randNum(0, knownLength - 1);//Grabs a random known skill.
+            if (experience >= (grog.skillExperience[skillPosition] + 1) * 5) {//Checks if there is enough remaining xp to upgrade the skill.
+                grog.skillExperience[skillPosition] = grog.skillExperience[skillPosition] + 1;//Increase the skills ranks by 1.
+                experience -= grog.skillExperience[skillPosition] * 5;//Deducts XP
+            }
+        }
+    }
+}
+
+//Retrieve a list of qualities from the file "qualities.txt" and add them to qualitiesraw as a vector<string> to be further processed into qualities for a character.
+void assignQualities(string qualityCareer, string qualityType) {
+    vector<string> qualityPossible;//Vector of possible qualities.
+    string line, commonName = "COMMON";//Line(holds a line from the file qualities.txt), commonName(Holds the value related to common qualities).
+    int position;//Holds the position of the vector being processed.
+    bool career, common, type;//Bools checking if the quality is found according to wether it matches the career, common, or positive/negative type.
+    QString file = QCoreApplication::applicationDirPath() + "/qualities.txt";//Path to qualities.txt located in the same directory as the exe.
+    QFile skillsFile(file);	//open the file containing the total list of qualities.
+    if (skillsFile.open(QFile::ReadOnly)) {		//Check wether the file is open, search it from the qualities skills, then add them to the vector "qualityRaw".
+        QTextStream in(&skillsFile);
+        while (!in.atEnd()) {//If not at eof, continue.
+            line = in.readLine().toUtf8().constData();//Read a line, convert to utf.
+            career = line.string::find(qualityCareer) != std::string::npos;//Check if it matches the career type.
+            type = line.string::find(qualityType) != std::string::npos;//Check if it matches the virtue or flaw type.
+            common = line.string::find(commonName) != std::string::npos;//Check if it matches the common value.
+            if ((career == true || common == true) && type == true) {	//Check if a skill is common or matches the category, then add it if it is.
+                qualityPossible.push_back(line);
+            }
+        }
+        if(qualityType == "POSITIVE"){//Decides wether to add it to the positive qualities, or negative.
+            position = randNum(0, qualityPossible.size() - 1);//Grabs the position of a random quality from qualityPossible.
+            grog.positiveQualities.push_back(qualityPossible[position]);//Adds a quality from qualityPossible to grog.positiveQualities.
+            qualityPossible.erase(qualityPossible.begin() + position);//Erase the quality from qualityPossible.
+        }else{
+            position = randNum(0, qualityPossible.size() - 1);//Grabs the position of a random quality from qualityPossible
+            grog.negativeQualities.push_back(qualityPossible[position]);//Adds a quality from qualityPossible to grog.negativeQualities.
+            qualityPossible.erase(qualityPossible.begin() + position);//Erase the quality from qualityPossible.
+        }
+        skillsFile.close();	//Close the file
+    }
+}
+
+void generate(int age, string career)
+{
+    grog = learnedSkills();//Reset the part grog.
+    srand(time(NULL));//Seed the random function
+    int youthYears = 3, qualityAmount;//Initialize the number of years one spends in "youth" and the amount of qualities an individual has.
+    string youth = "YOUTH", positive = "POSITIVE", negative = "NEGATIVE";//Holds the values for youth, positive, negative, Variables used for retrieving valid skills/qualities.
+    bool requiredQuality = false;
+    //Checks if the career has a required quality, if so sets requiredQuality to true.
+    if(career == "MARTIAL" || career == "SCHOLAR"){
+        requiredQuality = true;
+    }
+    genAttributes();//Call the function to generate attributes.
+    vector<string> careerSkillArray = retrieveSkills(career);//Call retrieveSkills for a career, returning the valid vector of skills for a career.
+    vector<string> youthSkillArray = retrieveSkills(youth);//Call retrieveSkills for youth, returning the valid vector of skills for a youth.
+    assignSkills(youthSkillArray, youthYears, requiredQuality);//Assigns skills for a youth.
+    assignSkills(careerSkillArray, age - youthYears);//Assigns skills for a career.
+    if(career == "MARTIAL" || career == "SCHOLAR"){//Requires a minimum of one quality if a career is MARTIAL or SCHOLAR.
+        qualityAmount = randNum(1, 3);
+    }else{
+        qualityAmount = randNum(0, 3);
+    }
+     while(qualityAmount > 0){//Grabs a number of qualities, one positive and one negative for the determined amount of qualities a character has(qualityAmount)
+         if((career == "MARTIAL" || career == "SCHOLAR") && requiredQuality == true){//Checks if the career has a required quality
+             if(career == "MARTIAL"){//Checks if MARTIAL, if not assume SCHOLAR.
+                 grog.positiveQualities.push_back("Warrior");//Adds Warrior to positiveQualities.
+                 requiredQuality = false;
+             }else{
+                 grog.positiveQualities.push_back("Educated");//Adds Educated to positiveQualities.
+                 requiredQuality = false;
+             }
+         }else{//Assigns a random positive quality that meets criteria to positiveQualities.
+             assignQualities(career, positive);
+         }
+        assignQualities(career, negative);//Assigns a random negative quality that meets criteria to negativeQualities.
+        qualityAmount--;
+    }
+    std::sort(grog.skillExperience.begin(), grog.skillExperience.end());//Sorts the array from lowest to highest.
+    std::reverse(grog.skillExperience.begin(), grog.skillExperience.end());//Reverse the array, making it highest  to lowest.
+}
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+    MainWindow w;
+    w.show();
+
+    return a.exec();
+}
